@@ -21,6 +21,7 @@ mod imp {
         pub compact_height: Cell<i32>,
         pub video_width: Cell<i32>,
         pub video_height: Cell<i32>,
+        pub cursor_edge: RefCell<Option<gdk::SurfaceEdge>>,
     }
 
     #[glib::object_subclass]
@@ -91,6 +92,7 @@ impl CamOverlayWindow {
 
         self.setup_pipeline();
         self.setup_drag();
+        self.setup_motion();
         self.setup_double_click();
         self.setup_context_menu();
         self.setup_actions();
@@ -143,7 +145,7 @@ impl CamOverlayWindow {
         if flipped {
             if let Some(bin) = pipeline.downcast_ref::<gstreamer::Bin>() {
                 if let Some(flipper) = bin.by_name("flipper") {
-                    flipper.set_property("method", 4i32);
+                    flipper.set_property_from_str("method", "horizontal-flip");
                 }
             }
         }
@@ -198,23 +200,53 @@ impl CamOverlayWindow {
         drag.set_button(1);
 
         let win = self.clone();
-        drag.connect_drag_begin(move |gesture, _x, _y| {
-            if win.imp().is_expanded.get() {
-                return;
-            }
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
+        drag.connect_drag_begin(move |gesture, x, y| {
+            let edge = *win.imp().cursor_edge.borrow();
             use gtk4::prelude::NativeExt;
             let win_ref = win.upcast_ref::<gtk4::Window>();
             if let Some(surface) = win_ref.surface() {
                 if let Ok(toplevel) = surface.downcast::<gdk::Toplevel>() {
                     if let Some(device) = gesture.device() {
-                        toplevel.begin_move(&device, 1, 0.0, 0.0, gdk::CURRENT_TIME);
+                        if let Some(e) = edge {
+                            gesture.set_state(gtk4::EventSequenceState::Claimed);
+                            toplevel.begin_resize(e, Some(&device), 1, x, y, gdk::CURRENT_TIME);
+                        } else if !win.imp().is_expanded.get() {
+                            gesture.set_state(gtk4::EventSequenceState::Claimed);
+                            toplevel.begin_move(&device, 1, x, y, gdk::CURRENT_TIME);
+                        }
                     }
                 }
             }
         });
 
         self.add_controller(drag);
+    }
+
+    fn setup_motion(&self) {
+        const BORDER: f64 = 8.0;
+        let motion = gtk4::EventControllerMotion::new();
+        let win = self.clone();
+        motion.connect_motion(move |_, x, y| {
+            let w = win.default_width() as f64;
+            let h = win.default_height() as f64;
+            let left = x < BORDER;
+            let right = x > w - BORDER;
+            let top = y < BORDER;
+            let bottom = y > h - BORDER;
+            let edge = match (left, right, top, bottom) {
+                (true, _, true, _) => Some(gdk::SurfaceEdge::NorthWest),
+                (_, true, true, _) => Some(gdk::SurfaceEdge::NorthEast),
+                (true, _, _, true) => Some(gdk::SurfaceEdge::SouthWest),
+                (_, true, _, true) => Some(gdk::SurfaceEdge::SouthEast),
+                (true, _, _, _)    => Some(gdk::SurfaceEdge::West),
+                (_, true, _, _)    => Some(gdk::SurfaceEdge::East),
+                (_, _, true, _)    => Some(gdk::SurfaceEdge::North),
+                (_, _, _, true)    => Some(gdk::SurfaceEdge::South),
+                _                  => None,
+            };
+            *win.imp().cursor_edge.borrow_mut() = edge;
+        });
+        self.add_controller(motion);
     }
 
     fn setup_double_click(&self) {
@@ -238,6 +270,7 @@ impl CamOverlayWindow {
 
         if expanded {
             imp.is_expanded.set(false);
+            self.set_size_request(-1, -1);
             self.set_default_size(imp.compact_width.get(), imp.compact_height.get());
 
             if let Some(overlay) = imp.overlay_container.borrow().as_ref() {
@@ -261,10 +294,10 @@ impl CamOverlayWindow {
                 {
                     let geometry = monitor.geometry();
                     let padding = 60;
-                    self.set_default_size(
-                        geometry.width() - padding * 2,
-                        geometry.height() - padding * 2,
-                    );
+                    let expanded_w = geometry.width() - padding * 2;
+                    let expanded_h = geometry.height() - padding * 2;
+                    self.set_size_request(expanded_w, expanded_h);
+                    self.set_default_size(expanded_w, expanded_h);
                 }
             }
 
@@ -415,7 +448,7 @@ impl CamOverlayWindow {
         if let Some(pipeline) = self.imp().pipeline.borrow().as_ref() {
             if let Some(bin) = pipeline.downcast_ref::<gstreamer::Bin>() {
                 if let Some(flipper) = bin.by_name("flipper") {
-                    flipper.set_property("method", if flipped { 4i32 } else { 0i32 });
+                    flipper.set_property_from_str("method", if flipped { "horizontal-flip" } else { "none" });
                 }
             }
         }
