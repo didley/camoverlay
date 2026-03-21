@@ -1,14 +1,11 @@
 .circle {
     border-radius: 50%;
-    overflow: hidden;
 }
 
 .rounded-rect {
     border-radius: 16px;
-    overflow: hidden;
 }
 
 .expanded {
     border-radius: 40px;
-    overflow: hidden;
 }
