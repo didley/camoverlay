@@ -80,13 +80,14 @@ impl CamOverlayWindow {
 
         let overlay_container = gtk4::Overlay::new();
         let video_picture = gtk4::Picture::new();
+
         let fit_mode = settings.string("fit-mode");
         let fit = match fit_mode.as_str() {
-            "contain" => gtk4::ContentFit::Contain,
-            "fill"    => gtk4::ContentFit::Fill,
-            _         => gtk4::ContentFit::Cover,
+            "fill" => gtk4::ContentFit::Fill,
+            _      => gtk4::ContentFit::Cover,
         };
         video_picture.set_content_fit(fit);
+
         overlay_container.set_child(Some(&video_picture));
         self.set_content(Some(&overlay_container));
 
@@ -162,7 +163,7 @@ impl CamOverlayWindow {
 
         *imp.pipeline.borrow_mut() = Some(pipeline);
 
-        // Poll for negotiated caps on the main thread, then apply saved zoom
+        // Poll for negotiated caps on the main thread, then apply saved zoom + fit
         let win = self.clone();
         glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
             let imp = win.imp();
@@ -193,8 +194,12 @@ impl CamOverlayWindow {
                 let zoom = imp.settings.borrow().as_ref()
                     .map(|s| s.int("zoom-level"))
                     .unwrap_or(1);
+                let fit_mode = imp.settings.borrow().as_ref()
+                    .map(|s| s.string("fit-mode").to_string())
+                    .unwrap_or_default();
                 drop(pipeline_ref);
                 win.apply_zoom(zoom);
+                win.apply_fit_mode(&fit_mode);
                 return glib::ControlFlow::Break;
             }
             glib::ControlFlow::Continue
@@ -205,9 +210,7 @@ impl CamOverlayWindow {
         let drag = gtk4::GestureDrag::new();
         drag.set_button(1);
 
-        // Track whether this drag has already initiated a move/resize
         let initiated = std::rc::Rc::new(std::cell::Cell::new(false));
-        // Capture the edge at press time (cursor may leave edge zone during drag)
         let edge_at_press: std::rc::Rc<std::cell::Cell<Option<gdk::SurfaceEdge>>> =
             std::rc::Rc::new(std::cell::Cell::new(None));
 
@@ -224,7 +227,6 @@ impl CamOverlayWindow {
             if initiated.get() {
                 return;
             }
-            // Wait for meaningful movement before committing to a drag
             if (offset_x * offset_x + offset_y * offset_y) < 16.0 {
                 return;
             }
@@ -250,7 +252,8 @@ impl CamOverlayWindow {
     }
 
     fn setup_motion(&self) {
-        const BORDER: f64 = 8.0;
+        // Wider border makes the resize handle easier to grab on a transparent window
+        const BORDER: f64 = 16.0;
         let motion = gtk4::EventControllerMotion::new();
         let win = self.clone();
         motion.connect_motion(move |_, x, y| {
@@ -279,8 +282,6 @@ impl CamOverlayWindow {
     fn setup_double_click(&self) {
         let click = gtk4::GestureClick::new();
         click.set_button(1);
-        // Capture phase runs before the drag gesture, so double-click
-        // can claim the event before drag_update sees it
         click.set_propagation_phase(gtk4::PropagationPhase::Capture);
 
         let win = self.clone();
@@ -339,7 +340,7 @@ impl CamOverlayWindow {
         fit_section.append(Some("Crop"), Some("win.fit::cover"));
         fit_section.append(Some("Fit"), Some("win.fit::contain"));
         fit_section.append(Some("Stretch"), Some("win.fit::fill"));
-        menu.append_section(Some("Fit"), &fit_section);
+        menu.append_section(Some("Scale"), &fit_section);
 
         let mirror_section = gio::Menu::new();
         mirror_section.append(Some("Mirror"), Some("win.flip"));
@@ -484,9 +485,19 @@ impl CamOverlayWindow {
 
     fn apply_fit_mode(&self, mode: &str) {
         let fit = match mode {
-            "contain" => gtk4::ContentFit::Contain,
-            "fill"    => gtk4::ContentFit::Fill,
-            _         => gtk4::ContentFit::Cover,
+            "contain" => {
+                let imp = self.imp();
+                let vw = imp.video_width.get();
+                let vh = imp.video_height.get();
+                let w = self.default_width();
+                if vw > 0 && vh > 0 && w > 0 {
+                    let new_h = (w as f64 * vh as f64 / vw as f64) as i32;
+                    self.set_default_size(w, new_h);
+                }
+                gtk4::ContentFit::Cover
+            }
+            "fill" => gtk4::ContentFit::Fill,
+            _ => gtk4::ContentFit::Cover,
         };
         if let Some(picture) = self.imp().video_picture.borrow().as_ref() {
             picture.set_content_fit(fit);
