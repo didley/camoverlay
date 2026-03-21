@@ -70,17 +70,17 @@ mod imp {
                 );
                 snapshot.push_rounded_clip(&rounded);
                 self.parent_snapshot(snapshot);
-                snapshot.pop();
                 snapshot.append_border(&rounded, &border_width, &border_color);
+                snapshot.pop();
             } else if is_rounded {
                 let rounded = gtk4::gsk::RoundedRect::from_rect(
-                    gtk4::graphene::Rect::new(1.0, 1.0, w - 2.0, h - 2.0),
+                    gtk4::graphene::Rect::new(0.0, 0.0, w, h),
                     16.0,
                 );
                 snapshot.push_rounded_clip(&rounded);
                 self.parent_snapshot(snapshot);
-                snapshot.pop();
                 snapshot.append_border(&rounded, &border_width, &border_color);
+                snapshot.pop();
             } else {
                 self.parent_snapshot(snapshot);
             }
@@ -98,15 +98,13 @@ mod imp {
             if is_circle {
                 let w = widget.width() as f64;
                 let h = widget.height() as f64;
-                let r = w.min(h) / 2.0;
                 let cx = w / 2.0;
                 let cy = h / 2.0;
                 let dx = x - cx;
                 let dy = y - cy;
-                // Inside circle, or within the resize grab border at window edges
-                dx * dx + dy * dy <= r * r
-                    || x < 16.0 || x > w - 16.0
-                    || y < 16.0 || y > h - 16.0
+                // Circle interior + thin ring outside the edge for resize handle grab
+                let grab_r = w.min(h) / 2.0 + 8.0;
+                dx * dx + dy * dy <= grab_r * grab_r
             } else {
                 self.parent_contains(x, y)
             }
@@ -135,14 +133,22 @@ impl CamOverlayWindow {
         let settings = gio::Settings::new(SETTINGS_SCHEMA);
         *imp.settings.borrow_mut() = Some(settings.clone());
 
+        self.add_css_class("cam-overlay");
         self.set_decorated(false);
         self.set_resizable(true);
 
         let saved_width = settings.int("window-width");
         let saved_height = settings.int("window-height");
-        self.set_default_size(saved_width, saved_height);
-        imp.compact_width.set(saved_width);
-        imp.compact_height.set(saved_height);
+        let shape = settings.string("shape");
+        let (init_w, init_h) = if shape.as_str() == "circle" {
+            let s = saved_width.min(saved_height).max(1);
+            (s, s)
+        } else {
+            (saved_width, saved_height)
+        };
+        self.set_default_size(init_w, init_h);
+        imp.compact_width.set(init_w);
+        imp.compact_height.set(init_h);
 
         let overlay_container = gtk4::Overlay::new();
         let video_picture = gtk4::Picture::new();
@@ -160,7 +166,6 @@ impl CamOverlayWindow {
         *imp.overlay_container.borrow_mut() = Some(overlay_container.clone());
         *imp.video_picture.borrow_mut() = Some(video_picture);
 
-        let shape = settings.string("shape");
         overlay_container.add_css_class(shape.as_str());
 
         self.setup_pipeline();
@@ -170,13 +175,22 @@ impl CamOverlayWindow {
         self.setup_context_menu();
         self.setup_actions();
 
-        // Save compact size on resize (only when not expanded)
+        // Save compact size on resize; enforce square in circle mode
         let win = self.clone();
         self.connect_notify_local(Some("default-width"), move |_, _| {
             if !win.imp().is_expanded.get() {
-                let w = win.default_width();
-                let h = win.default_height();
+                let mut w = win.default_width();
+                let mut h = win.default_height();
                 if w > 0 && h > 0 {
+                    let is_circle = win.imp().settings.borrow().as_ref()
+                        .map(|s| s.string("shape") == "circle")
+                        .unwrap_or(false);
+                    if is_circle {
+                        let size = w.min(h);
+                        w = size;
+                        h = size;
+                        win.set_default_size(size, size);
+                    }
                     win.imp().compact_width.set(w);
                     win.imp().compact_height.set(h);
                     if let Some(s) = win.imp().settings.borrow().as_ref() {
@@ -319,29 +333,57 @@ impl CamOverlayWindow {
     }
 
     fn setup_motion(&self) {
-        // Wider border makes the resize handle easier to grab on a transparent window
         const BORDER: f64 = 16.0;
         let motion = gtk4::EventControllerMotion::new();
         let win = self.clone();
         motion.connect_motion(move |_, x, y| {
-            let w = win.default_width() as f64;
-            let h = win.default_height() as f64;
-            let left = x < BORDER;
-            let right = x > w - BORDER;
-            let top = y < BORDER;
-            let bottom = y > h - BORDER;
-            let edge = match (left, right, top, bottom) {
-                (true, _, true, _) => Some(gdk::SurfaceEdge::NorthWest),
-                (_, true, true, _) => Some(gdk::SurfaceEdge::NorthEast),
-                (true, _, _, true) => Some(gdk::SurfaceEdge::SouthWest),
-                (_, true, _, true) => Some(gdk::SurfaceEdge::SouthEast),
-                (true, _, _, _)    => Some(gdk::SurfaceEdge::West),
-                (_, true, _, _)    => Some(gdk::SurfaceEdge::East),
-                (_, _, true, _)    => Some(gdk::SurfaceEdge::North),
-                (_, _, _, true)    => Some(gdk::SurfaceEdge::South),
-                _                  => None,
+            let imp = win.imp();
+            // Use actual allocated size — default_width() lags during a WM-driven resize
+            let w = win.width() as f64;
+            let h = win.height() as f64;
+
+            let is_circle = !imp.is_expanded.get()
+                && imp.overlay_container.borrow().as_ref()
+                    .map(|o| o.has_css_class("circle"))
+                    .unwrap_or(false);
+
+            let edge = if is_circle {
+                let cx = w / 2.0;
+                let cy = h / 2.0;
+                let r = w.min(h) / 2.0;
+                let dx = x - cx;
+                let dy = y - cy;
+                let dist_sq = dx * dx + dy * dy;
+                let inner = r - BORDER;
+                // Near the circle edge → corner resize based on quadrant so both
+                // dimensions change together and the window stays square
+                if dist_sq >= inner * inner {
+                    Some(if x < cx {
+                        if y < cy { gdk::SurfaceEdge::NorthWest } else { gdk::SurfaceEdge::SouthWest }
+                    } else {
+                        if y < cy { gdk::SurfaceEdge::NorthEast } else { gdk::SurfaceEdge::SouthEast }
+                    })
+                } else {
+                    None // inside circle → move gesture
+                }
+            } else {
+                let left   = x < BORDER;
+                let right  = x > w - BORDER;
+                let top    = y < BORDER;
+                let bottom = y > h - BORDER;
+                match (left, right, top, bottom) {
+                    (true, _, true, _) => Some(gdk::SurfaceEdge::NorthWest),
+                    (_, true, true, _) => Some(gdk::SurfaceEdge::NorthEast),
+                    (true, _, _, true) => Some(gdk::SurfaceEdge::SouthWest),
+                    (_, true, _, true) => Some(gdk::SurfaceEdge::SouthEast),
+                    (true, _, _, _)    => Some(gdk::SurfaceEdge::West),
+                    (_, true, _, _)    => Some(gdk::SurfaceEdge::East),
+                    (_, _, true, _)    => Some(gdk::SurfaceEdge::North),
+                    (_, _, _, true)    => Some(gdk::SurfaceEdge::South),
+                    _                  => None,
+                }
             };
-            *win.imp().cursor_edge.borrow_mut() = edge;
+            *imp.cursor_edge.borrow_mut() = edge;
         });
         self.add_controller(motion);
     }
@@ -544,11 +586,11 @@ impl CamOverlayWindow {
         let Some(surface) = self.upcast_ref::<gtk4::Window>().surface() else { return; };
         let imp = self.imp();
 
-        let is_circle = !imp.is_expanded.get()
+        let is_shaped = !imp.is_expanded.get()
             && imp.overlay_container
                 .borrow()
                 .as_ref()
-                .map(|o| o.has_css_class("circle"))
+                .map(|o| o.has_css_class("circle") || o.has_css_class("rounded-rect"))
                 .unwrap_or(false);
 
         // Always use full window for input so resize handles work at all edges
@@ -557,22 +599,12 @@ impl CamOverlayWindow {
         );
         surface.set_input_region(&full);
 
-        // Tell the compositor only the circle is opaque so it composites correctly
-        if is_circle {
-            let w = self.width();
-            let h = self.height();
-            let size = w.min(h);
-            let cx = w / 2;
-            let cy = h / 2;
-            let r = size / 2;
-            let opaque = gtk4::cairo::Region::create();
-            for y in (cy - r)..=(cy + r) {
-                let dy = (y - cy).abs();
-                let dx = (((r * r - dy * dy) as f64).sqrt()) as i32;
-                let rect = gtk4::cairo::RectangleInt::new(cx - dx, y, (2 * dx + 1).max(1), 1);
-                let _ = opaque.union_rectangle(&rect);
-            }
-            surface.set_opaque_region(Some(&opaque));
+        // For shaped windows, don't hint the compositor with an approximated opaque region —
+        // a pixel-row circle approximation is jagged and causes compositor artifacts at the
+        // edges. Setting None lets the compositor composite correctly from the alpha channel.
+        // For expanded (rectangular) windows, the full region is correct.
+        if is_shaped {
+            surface.set_opaque_region(None);
         } else {
             surface.set_opaque_region(Some(&full));
         }
@@ -587,6 +619,14 @@ impl CamOverlayWindow {
             overlay.remove_css_class("circle");
             overlay.remove_css_class("rounded-rect");
             overlay.add_css_class(shape);
+        }
+        if shape == "circle" {
+            let w = imp.compact_width.get().max(1);
+            let h = imp.compact_height.get().max(1);
+            let size = w.min(h);
+            self.set_default_size(size, size);
+            imp.compact_width.set(size);
+            imp.compact_height.set(size);
         }
         self.update_input_region();
     }

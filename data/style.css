@@ -1,13 +1,3 @@
-window {
+window.cam-overlay {
     background-color: transparent;
-}
-
-.circle {
-    border-radius: 50%;
-    overflow: hidden;
-}
-
-.rounded-rect {
-    border-radius: 16px;
-    overflow: hidden;
 }
