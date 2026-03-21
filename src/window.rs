@@ -136,6 +136,7 @@ impl CamOverlayWindow {
         self.add_css_class("cam-overlay");
         self.set_decorated(false);
         self.set_resizable(true);
+        self.set_size_request(60, 60);
 
         let saved_width = settings.int("window-width");
         let saved_height = settings.int("window-height");

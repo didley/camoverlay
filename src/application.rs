@@ -79,7 +79,7 @@ impl CamOverlayApplication {
                 .version(config::VERSION)
                 .application_icon(config::APP_ID)
                 .license_type(gtk4::License::Gpl30)
-                .comments("Webcam preview overlay for screen recording.\n\nTip: Use your compositor's window menu (e.g. Super+Right Click) to set Always on Top.")
+                .comments("Webcam preview overlay for screen recording.\n\nTip: Use your compositor's window menu to set Always on Top.\nOn GNOME: Super+Right Click on the window, or Alt+Space.")
                 .build();
 
             about.present(Some(&window));
