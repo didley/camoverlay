@@ -1,5 +1,6 @@
 use adw::prelude::*;
-use adw::subclass::prelude::*;
+use gtk4::prelude::*;
+use gtk4::subclass::prelude::*;
 use glib::prelude::IsA;
 use gtk4::{gdk, gio, glib};
 use gstreamer::prelude::*;
@@ -28,7 +29,7 @@ mod imp {
     impl ObjectSubclass for CamOverlayWindow {
         const NAME: &'static str = "CamOverlayWindow";
         type Type = super::CamOverlayWindow;
-        type ParentType = adw::ApplicationWindow;
+        type ParentType = gtk4::ApplicationWindow;
     }
 
     impl ObjectImpl for CamOverlayWindow {
@@ -44,20 +45,85 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for CamOverlayWindow {}
+    impl WidgetImpl for CamOverlayWindow {
+        fn snapshot(&self, snapshot: &gtk4::Snapshot) {
+            let widget = self.obj();
+            let overlay_ref = self.overlay_container.borrow();
+            let overlay = overlay_ref.as_ref();
+            let expanded = self.is_expanded.get();
+
+            let is_circle = !expanded && overlay.map(|o| o.has_css_class("circle")).unwrap_or(false);
+            let is_rounded = !expanded && overlay.map(|o| o.has_css_class("rounded-rect")).unwrap_or(false);
+
+            let w = widget.width() as f32;
+            let h = widget.height() as f32;
+            let border_color = [gdk::RGBA::new(0.0, 0.0, 0.0, 0.4); 4];
+            let border_width = [2.0f32; 4];
+
+            if is_circle {
+                let size = w.min(h);
+                let x = (w - size) / 2.0;
+                let y = (h - size) / 2.0;
+                let rounded = gtk4::gsk::RoundedRect::from_rect(
+                    gtk4::graphene::Rect::new(x, y, size, size),
+                    size / 2.0,
+                );
+                snapshot.push_rounded_clip(&rounded);
+                self.parent_snapshot(snapshot);
+                snapshot.pop();
+                snapshot.append_border(&rounded, &border_width, &border_color);
+            } else if is_rounded {
+                let rounded = gtk4::gsk::RoundedRect::from_rect(
+                    gtk4::graphene::Rect::new(1.0, 1.0, w - 2.0, h - 2.0),
+                    16.0,
+                );
+                snapshot.push_rounded_clip(&rounded);
+                self.parent_snapshot(snapshot);
+                snapshot.pop();
+                snapshot.append_border(&rounded, &border_width, &border_color);
+            } else {
+                self.parent_snapshot(snapshot);
+            }
+        }
+
+        fn contains(&self, x: f64, y: f64) -> bool {
+            let widget = self.obj();
+            let is_circle = !self.is_expanded.get()
+                && self.overlay_container
+                    .borrow()
+                    .as_ref()
+                    .map(|o| o.has_css_class("circle"))
+                    .unwrap_or(false);
+
+            if is_circle {
+                let w = widget.width() as f64;
+                let h = widget.height() as f64;
+                let r = w.min(h) / 2.0;
+                let cx = w / 2.0;
+                let cy = h / 2.0;
+                let dx = x - cx;
+                let dy = y - cy;
+                // Inside circle, or within the resize grab border at window edges
+                dx * dx + dy * dy <= r * r
+                    || x < 16.0 || x > w - 16.0
+                    || y < 16.0 || y > h - 16.0
+            } else {
+                self.parent_contains(x, y)
+            }
+        }
+    }
     impl WindowImpl for CamOverlayWindow {}
     impl ApplicationWindowImpl for CamOverlayWindow {}
-    impl AdwApplicationWindowImpl for CamOverlayWindow {}
 }
 
 glib::wrapper! {
     pub struct CamOverlayWindow(ObjectSubclass<imp::CamOverlayWindow>)
-        @extends adw::ApplicationWindow, gtk4::ApplicationWindow, gtk4::Window, gtk4::Widget,
+        @extends gtk4::ApplicationWindow, gtk4::Window, gtk4::Widget,
         @implements gio::ActionGroup, gio::ActionMap;
 }
 
 impl CamOverlayWindow {
-    pub fn new(app: &impl IsA<adw::Application>) -> Self {
+    pub fn new(app: &impl IsA<gtk4::Application>) -> Self {
         glib::Object::builder()
             .property("application", app)
             .build()
@@ -89,7 +155,7 @@ impl CamOverlayWindow {
         video_picture.set_content_fit(fit);
 
         overlay_container.set_child(Some(&video_picture));
-        self.set_content(Some(&overlay_container));
+        self.set_child(Some(&overlay_container));
 
         *imp.overlay_container.borrow_mut() = Some(overlay_container.clone());
         *imp.video_picture.borrow_mut() = Some(video_picture);
@@ -119,6 +185,7 @@ impl CamOverlayWindow {
                     }
                 }
             }
+            win.update_input_region();
         });
     }
 
@@ -308,6 +375,7 @@ impl CamOverlayWindow {
                     .unwrap_or_else(|| "circle".to_string());
                 overlay.add_css_class(&shape);
             }
+            self.update_input_region();
         } else {
             let w = self.default_width();
             let h = self.default_height();
@@ -471,6 +539,45 @@ impl CamOverlayWindow {
         }
     }
 
+    fn update_input_region(&self) {
+        use gtk4::prelude::NativeExt;
+        let Some(surface) = self.upcast_ref::<gtk4::Window>().surface() else { return; };
+        let imp = self.imp();
+
+        let is_circle = !imp.is_expanded.get()
+            && imp.overlay_container
+                .borrow()
+                .as_ref()
+                .map(|o| o.has_css_class("circle"))
+                .unwrap_or(false);
+
+        // Always use full window for input so resize handles work at all edges
+        let full = gtk4::cairo::Region::create_rectangle(
+            &gtk4::cairo::RectangleInt::new(0, 0, self.width(), self.height())
+        );
+        surface.set_input_region(&full);
+
+        // Tell the compositor only the circle is opaque so it composites correctly
+        if is_circle {
+            let w = self.width();
+            let h = self.height();
+            let size = w.min(h);
+            let cx = w / 2;
+            let cy = h / 2;
+            let r = size / 2;
+            let opaque = gtk4::cairo::Region::create();
+            for y in (cy - r)..=(cy + r) {
+                let dy = (y - cy).abs();
+                let dx = (((r * r - dy * dy) as f64).sqrt()) as i32;
+                let rect = gtk4::cairo::RectangleInt::new(cx - dx, y, (2 * dx + 1).max(1), 1);
+                let _ = opaque.union_rectangle(&rect);
+            }
+            surface.set_opaque_region(Some(&opaque));
+        } else {
+            surface.set_opaque_region(Some(&full));
+        }
+    }
+
     fn apply_shape(&self, shape: &str) {
         let imp = self.imp();
         if imp.is_expanded.get() {
@@ -481,6 +588,7 @@ impl CamOverlayWindow {
             overlay.remove_css_class("rounded-rect");
             overlay.add_css_class(shape);
         }
+        self.update_input_region();
     }
 
     fn apply_fit_mode(&self, mode: &str) {

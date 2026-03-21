@@ -1,6 +1,5 @@
-window,
-window.background {
-    background: none;
+window {
+    background-color: transparent;
 }
 
 .circle {
