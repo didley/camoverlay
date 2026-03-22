@@ -27,7 +27,7 @@ modules:
       - type: git
         url: https://github.com/didley/camoverlay.git
         tag: v0.1.0
-        commit: f522fdb9ec3cb13bd8a5600f2f828f61f1898276
+        commit: 4ec03a673961555fca271235638598132f0eac16
       - cargo-sources.json
       - type: inline
         contents: |
