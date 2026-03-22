@@ -24,6 +24,7 @@
     </ul>
   </description>
   <launchable type="desktop-id">io.github.didley.CamOverlay.desktop</launchable>
+  <url type="homepage">https://github.com/didley/camoverlay</url>
   <url type="vcs-browser">https://github.com/didley/camoverlay</url>
   <releases>
     <release version="0.1.0" date="2026-03-22">
