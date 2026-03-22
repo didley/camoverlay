@@ -1,8 +1,23 @@
-# Cam Overlay
+<h1 align="center">
+  <img src="data/icons/hicolor/scalable/apps/io.github.didley.CamOverlay.svg" alt="Cam Overlay Icon" width="128" height="128"/>
+  <br>
+  GNOME Cam Overlay
+</h1>
 
 A minimal GNOME app that displays a webcam preview as a borderless overlay, for use during screen recording.
 
 No recording — just a live preview with zoom, shape, and flip controls via right-click menu.
+
+<table align="center">
+  <tr>
+    <td><img src="data/screenshots/screenshot1.png" alt="Screenshot 1" width="400"/></td>
+    <td><img src="data/screenshots/screenshot2.png" alt="Screenshot 2" width="400"/></td>
+  </tr>
+  <tr>
+    <td><img src="data/screenshots/screenshot3.png" alt="Screenshot 3" width="400"/></td>
+    <td><img src="data/screenshots/screenshot4.png" alt="Screenshot 4" width="400"/></td>
+  </tr>
+</table>
 
 ## Features
 
