@@ -29,5 +29,23 @@
       </description>
     </release>
   </releases>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/didley/cam-overlay/main/data/screenshots/screenshot1.png</image>
+      <caption>Rounded rectangle webcam overlay</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/didley/cam-overlay/main/data/screenshots/screenshot2.png</image>
+      <caption>Circle webcam overlay</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/didley/cam-overlay/main/data/screenshots/screenshot3.png</image>
+      <caption>Webcam overlay in the corner</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/didley/cam-overlay/main/data/screenshots/screenshot4.png</image>
+      <caption>Settings menu with camera, zoom, shape, and scale options</caption>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
 </component>
