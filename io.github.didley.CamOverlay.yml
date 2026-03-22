@@ -4,7 +4,7 @@ runtime-version: '49'
 sdk: org.gnome.Sdk//49
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-command: cam-overlay
+command: camoverlay
 finish-args:
   - --device=all
   - --share=ipc
@@ -14,10 +14,10 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:
-    CARGO_HOME: /run/build/cam-overlay/cargo-home
+    CARGO_HOME: /run/build/camoverlay/cargo-home
     RUST_BACKTRACE: '1'
 modules:
-  - name: cam-overlay
+  - name: camoverlay
     buildsystem: meson
     post-install:
       - glib-compile-schemas /app/share/glib-2.0/schemas
@@ -25,7 +25,7 @@ modules:
       - -Dbuildtype=release
     sources:
       - type: git
-        url: https://github.com/didley/cam-overlay.git
+        url: https://github.com/didley/camoverlay.git
         tag: v0.1.0
         commit: 25312a3bc2e6db2f02b7a02f86d266a895a6e0be
       - cargo-sources.json

@@ -145,7 +145,7 @@ impl CamOverlayWindow {
         let settings = gio::Settings::new(SETTINGS_SCHEMA);
         *imp.settings.borrow_mut() = Some(settings.clone());
 
-        self.add_css_class("cam-overlay");
+        self.add_css_class("camoverlay");
         self.set_decorated(false);
         self.set_resizable(true);
         self.set_size_request(60, 60);

@@ -1,4 +1,4 @@
-project('cam-overlay',
+project('camoverlay',
   'rust',
   version: '0.1.0',
   license: 'GPL-3.0-or-later',
@@ -48,7 +48,7 @@ cargo_build = custom_target(
   'cargo-build',
   build_by_default: true,
   build_always_stale: true,
-  output: 'cam-overlay',
+  output: 'camoverlay',
   console: true,
   env: cargo_env,
   command: [
@@ -56,7 +56,7 @@ cargo_build = custom_target(
     meson.project_source_root(),
     meson.project_build_root(),
     rust_target,
-    'cam-overlay',
+    'camoverlay',
   ],
   install: true,
   install_dir: bindir,

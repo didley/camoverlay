@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Cam Overlay
 Comment=Webcam preview overlay for screen recording
-Exec=cam-overlay
+Exec=camoverlay
 Icon=io.github.didley.CamOverlay
 Terminal=false
 Type=Application

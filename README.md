@@ -41,6 +41,7 @@ No recording — just a live preview with zoom, shape, and flip controls via rig
 ```sh
 flatpak-builder --user --install --force-clean build io.github.didley.CamOverlay.yml
 flatpak run io.github.didley.CamOverlay
+
 ```
 
 ### Local (meson)

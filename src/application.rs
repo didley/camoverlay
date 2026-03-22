@@ -89,7 +89,7 @@ impl CamOverlayApplication {
             content.append(&heading);
 
             let body = gtk4::Label::new(None);
-            body.set_markup("Webcam preview overlay for screen recording.\n\nCreated for fun by @didley, with love from Melbourne.\n\n<b>Always on Top</b>\nUse your compositor's window menu to set always on top.\nOn GNOME: Super + Right Click on the window, or Alt + Space.\n\n<b>Full Screen</b>\nDouble left-click the overlay to toggle full screen.\n\nLicense: GPL-3.0-or-later\n<a href=\"https://github.com/didley/cam-overlay\">github.com/didley/cam-overlay</a>");
+            body.set_markup("Webcam preview overlay for screen recording.\n\nCreated for fun by @didley, with love from Melbourne.\n\n<b>Always on Top</b>\nUse your compositor's window menu to set always on top.\nOn GNOME: Super + Right Click on the window, or Alt + Space.\n\n<b>Full Screen</b>\nDouble left-click the overlay to toggle full screen.\n\nLicense: GPL-3.0-or-later\n<a href=\"https://github.com/didley/camoverlay\">github.com/didley/camoverlay</a>");
             body.set_xalign(0.0);
             body.set_wrap(true);
             content.append(&body);
