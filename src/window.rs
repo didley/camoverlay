@@ -563,6 +563,7 @@ impl CamOverlayWindow {
 
         let about_section = gio::Menu::new();
         about_section.append(Some("About"), Some("app.about"));
+        about_section.append(Some("Quit"), Some("app.quit"));
         menu.append_section(None, &about_section);
 
         let popover = gtk4::PopoverMenu::from_model(Some(&menu));
