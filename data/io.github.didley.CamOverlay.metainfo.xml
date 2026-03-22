@@ -5,6 +5,9 @@
   <project_license>GPL-3.0-or-later</project_license>
   <name>Cam Overlay</name>
   <summary>Webcam preview overlay for screen recording</summary>
+  <developer id="io.github.didley">
+    <name>Dylan Lamont</name>
+  </developer>
   <description>
     <p>
       Cam Overlay displays a live webcam feed as a borderless overlay window,
@@ -48,4 +51,8 @@
     </screenshot>
   </screenshots>
   <content_rating type="oars-1.1"/>
+  <branding>
+    <color type="primary" scheme_preference="light">#ff6666</color>
+    <color type="primary" scheme_preference="dark">#990000</color>
+  </branding>
 </component>
