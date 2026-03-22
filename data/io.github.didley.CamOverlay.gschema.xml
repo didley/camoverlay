@@ -7,7 +7,7 @@
       <description>Camera zoom level: 1=1x, 2=1.5x, 3=2x</description>
     </key>
     <key name="shape" type="s">
-      <default>'circle'</default>
+      <default>'rounded-rect'</default>
       <summary>Overlay shape</summary>
       <description>Shape of the camera overlay: 'circle' or 'rounded-rect'</description>
     </key>
