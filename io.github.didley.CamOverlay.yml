@@ -1,7 +1,7 @@
 id: io.github.didley.CamOverlay
 runtime: org.gnome.Platform
-runtime-version: '49'
-sdk: org.gnome.Sdk//49
+runtime-version: '50'
+sdk: org.gnome.Sdk//50
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: camoverlay
