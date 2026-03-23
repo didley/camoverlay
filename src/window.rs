@@ -1,10 +1,13 @@
 use adw::prelude::*;
 use gtk4::subclass::prelude::*;
+use gtk4::prelude::NativeExt;
 use glib::prelude::IsA;
 use gtk4::{gdk, gio, glib};
 use gstreamer::prelude::*;
 use gstreamer::prelude::DeviceExt as GstDeviceExt;
+use gstreamer::MessageView;
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 const SETTINGS_SCHEMA: &str = "io.github.didley.CamOverlay";
 const RESIZE_BORDER: f64 = 16.0;
@@ -447,12 +450,9 @@ impl CamOverlayWindow {
     fn find_device(&self, serial: &str) -> Option<gstreamer::Device> {
         let monitor = self.imp().device_monitor.borrow();
         let monitor = monitor.as_ref()?;
-        for device in monitor.devices().iter() {
-            if device_id(&device).as_deref() == Some(serial) {
-                return Some((*device).clone());
-            }
-        }
-        None
+        monitor.devices().iter()
+            .find(|d| device_id(d).as_deref() == Some(serial))
+            .map(|d| (*d).clone())
     }
 
     fn camera_exists(&self, serial: &str) -> bool {
@@ -465,16 +465,15 @@ impl CamOverlayWindow {
         let drag = gtk4::GestureDrag::new();
         drag.set_button(1);
 
-        let initiated = std::rc::Rc::new(std::cell::Cell::new(false));
-        let edge_at_press: std::rc::Rc<std::cell::Cell<Option<gdk::SurfaceEdge>>> =
-            std::rc::Rc::new(std::cell::Cell::new(None));
+        let initiated = Rc::new(Cell::new(false));
+        let edge_at_press: Rc<Cell<Option<gdk::SurfaceEdge>>> = Rc::new(Cell::new(None));
 
-        let win1 = self.clone();
+        let win = self.clone();
         let initiated_begin = initiated.clone();
         let edge_begin = edge_at_press.clone();
         drag.connect_drag_begin(move |_, _, _| {
             initiated_begin.set(false);
-            edge_begin.set(*win1.imp().cursor_edge.borrow());
+            edge_begin.set(*win.imp().cursor_edge.borrow());
         });
 
         let win = self.clone();
@@ -487,7 +486,6 @@ impl CamOverlayWindow {
             }
             initiated.set(true);
             let edge = edge_at_press.get();
-            use gtk4::prelude::NativeExt;
             let win_ref = win.upcast_ref::<gtk4::Window>();
             if let Some(surface) = win_ref.surface() {
                 if let Ok(toplevel) = surface.downcast::<gdk::Toplevel>() {
@@ -524,10 +522,11 @@ impl CamOverlayWindow {
                 // Near the circle edge → corner resize based on quadrant so both
                 // dimensions change together and the window stays square
                 if dist_sq >= inner * inner {
-                    Some(if x < cx {
-                        if y < cy { gdk::SurfaceEdge::NorthWest } else { gdk::SurfaceEdge::SouthWest }
-                    } else {
-                        if y < cy { gdk::SurfaceEdge::NorthEast } else { gdk::SurfaceEdge::SouthEast }
+                    Some(match (x < cx, y < cy) {
+                        (true,  true)  => gdk::SurfaceEdge::NorthWest,
+                        (true,  false) => gdk::SurfaceEdge::SouthWest,
+                        (false, true)  => gdk::SurfaceEdge::NorthEast,
+                        (false, false) => gdk::SurfaceEdge::SouthEast,
                     })
                 } else {
                     None // inside circle → move gesture
@@ -589,8 +588,8 @@ impl CamOverlayWindow {
             if h > 0 { imp.compact_height.set(h); }
             imp.is_expanded.set(true);
             if let Some(overlay) = imp.overlay_container.borrow().as_ref() {
-                overlay.remove_css_class("circle");
-                overlay.remove_css_class("rounded-rect");
+                overlay.remove_css_class(Shape::Circle.as_str());
+                overlay.remove_css_class(Shape::RoundedRect.as_str());
             }
             self.fullscreen();
             self.update_input_region();
@@ -755,7 +754,6 @@ impl CamOverlayWindow {
         let bus = monitor.bus();
         let win_weak = self.downgrade();
         bus.add_watch_local(move |_, msg| {
-            use gstreamer::MessageView;
             let Some(win) = win_weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
@@ -812,7 +810,6 @@ impl CamOverlayWindow {
     }
 
     fn update_input_region(&self) {
-        use gtk4::prelude::NativeExt;
         let Some(surface) = self.upcast_ref::<gtk4::Window>().surface() else { return; };
         let imp = self.imp();
 
@@ -830,11 +827,7 @@ impl CamOverlayWindow {
             return;
         }
 
-        let is_shaped = imp.overlay_container
-            .borrow()
-            .as_ref()
-            .map(|o| o.has_css_class("circle") || o.has_css_class("rounded-rect"))
-            .unwrap_or(false);
+        let is_shaped = self.current_shape().is_some();
 
         // Always use full window for input so resize handles work at all edges
         let full = gtk4::cairo::Region::create_rectangle(
@@ -859,8 +852,8 @@ impl CamOverlayWindow {
             return;
         }
         if let Some(overlay) = imp.overlay_container.borrow().as_ref() {
-            overlay.remove_css_class("circle");
-            overlay.remove_css_class("rounded-rect");
+            overlay.remove_css_class(Shape::Circle.as_str());
+            overlay.remove_css_class(Shape::RoundedRect.as_str());
             overlay.add_css_class(shape.as_str());
         }
         if shape == Shape::Circle {
