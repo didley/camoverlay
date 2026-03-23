@@ -36,21 +36,7 @@ No recording — just a live preview with zoom, shape, and flip controls via rig
 
 ## Build
 
-### Flatpak (recommended)
-
-```sh
-flatpak-builder --user --install --force-clean build io.github.didley.CamOverlay.yml
-flatpak run io.github.didley.CamOverlay
-
-```
-
-### Local (meson)
-
-```sh
-meson setup build
-ninja -C build
-ninja -C build install
-```
+Requires [`just`](https://github.com/casey/just). See [`justfile`](justfile).
 
 ## Requirements
 
