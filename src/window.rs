@@ -1,6 +1,5 @@
 use adw::prelude::*;
 use gtk4::subclass::prelude::*;
-use gtk4::prelude::NativeExt;
 use glib::prelude::IsA;
 use gtk4::{gdk, gio, glib};
 use gstreamer::prelude::*;
@@ -146,36 +145,33 @@ mod imp {
             let widget = self.obj();
             let w = widget.width() as f32;
             let h = widget.height() as f32;
-            let border_color = [gdk::RGBA::new(0.0, 0.0, 0.0, 0.4); 4];
-            let border_width = [SHAPE_BORDER_WIDTH; 4];
 
-            match widget.current_shape() {
+            let rounded = match widget.current_shape() {
                 Some(Shape::Circle) => {
                     let size = w.min(h);
                     let x = (w - size) / 2.0;
                     let y = (h - size) / 2.0;
-                    let rounded = gtk4::gsk::RoundedRect::from_rect(
+                    Some(gtk4::gsk::RoundedRect::from_rect(
                         gtk4::graphene::Rect::new(x, y, size, size),
                         size / 2.0,
-                    );
-                    snapshot.push_rounded_clip(&rounded);
-                    self.parent_snapshot(snapshot);
-                    snapshot.append_border(&rounded, &border_width, &border_color);
-                    snapshot.pop();
+                    ))
                 }
-                Some(Shape::RoundedRect) => {
-                    let rounded = gtk4::gsk::RoundedRect::from_rect(
-                        gtk4::graphene::Rect::new(0.0, 0.0, w, h),
-                        ROUNDED_RECT_RADIUS,
-                    );
-                    snapshot.push_rounded_clip(&rounded);
-                    self.parent_snapshot(snapshot);
-                    snapshot.append_border(&rounded, &border_width, &border_color);
-                    snapshot.pop();
-                }
-                None => {
-                    self.parent_snapshot(snapshot);
-                }
+                Some(Shape::RoundedRect) => Some(gtk4::gsk::RoundedRect::from_rect(
+                    gtk4::graphene::Rect::new(0.0, 0.0, w, h),
+                    ROUNDED_RECT_RADIUS,
+                )),
+                None => None,
+            };
+
+            if let Some(ref r) = rounded {
+                let border_color = [gdk::RGBA::new(0.0, 0.0, 0.0, 0.4); 4];
+                let border_width = [SHAPE_BORDER_WIDTH; 4];
+                snapshot.push_rounded_clip(r);
+                self.parent_snapshot(snapshot);
+                snapshot.append_border(r, &border_width, &border_color);
+                snapshot.pop();
+            } else {
+                self.parent_snapshot(snapshot);
             }
         }
 
@@ -324,7 +320,7 @@ impl CamOverlayWindow {
             if let Some(monitor) = imp.device_monitor.borrow().as_ref() {
                 let devices = monitor.devices();
                 if let Some(first) = devices.iter().next() {
-                    if let Some(serial) = device_id(&first) {
+                    if let Some(serial) = device_id(first) {
                         camera_serial = serial.clone();
                         let _ = self.settings().set_string("camera-id", &serial);
                     }
@@ -456,9 +452,7 @@ impl CamOverlayWindow {
     }
 
     fn camera_exists(&self, serial: &str) -> bool {
-        self.imp().device_monitor.borrow().as_ref()
-            .map(|m| m.devices().iter().any(|d| device_id(&d).as_deref() == Some(serial)))
-            .unwrap_or(false)
+        self.find_device(serial).is_some()
     }
 
     fn setup_drag(&self) {
@@ -601,7 +595,7 @@ impl CamOverlayWindow {
 
         // Camera section (dynamically populated)
         let camera_menu = self.imp().camera_menu.borrow().clone()
-            .unwrap_or_else(gio::Menu::new);
+            .unwrap_or_default();
         menu.append_section(Some("Camera"), &camera_menu);
 
         let zoom_section = gio::Menu::new();
@@ -653,7 +647,7 @@ impl CamOverlayWindow {
         let current_camera = settings.string("camera-id").to_string();
         let camera_action = gio::SimpleAction::new_stateful(
             "camera",
-            Some(&glib::VariantTy::STRING),
+            Some(glib::VariantTy::STRING),
             &current_camera.to_variant(),
         );
         let win = self.clone();
@@ -671,7 +665,7 @@ impl CamOverlayWindow {
         let zoom_level = settings.int("zoom-level").to_string();
         let zoom_action = gio::SimpleAction::new_stateful(
             "zoom",
-            Some(&glib::VariantTy::STRING),
+            Some(glib::VariantTy::STRING),
             &zoom_level.to_variant(),
         );
         let win = self.clone();
@@ -690,7 +684,7 @@ impl CamOverlayWindow {
         let current_shape = settings.string("shape").to_string();
         let shape_action = gio::SimpleAction::new_stateful(
             "shape",
-            Some(&glib::VariantTy::STRING),
+            Some(glib::VariantTy::STRING),
             &current_shape.to_variant(),
         );
         let win = self.clone();
@@ -708,7 +702,7 @@ impl CamOverlayWindow {
         let current_fit = settings.string("fit-mode").to_string();
         let fit_action = gio::SimpleAction::new_stateful(
             "fit",
-            Some(&glib::VariantTy::STRING),
+            Some(glib::VariantTy::STRING),
             &current_fit.to_variant(),
         );
         let win = self.clone();
@@ -782,8 +776,8 @@ impl CamOverlayWindow {
         }
 
         for device in devices.iter() {
-            let name = GstDeviceExt::display_name(&*device);
-            if let Some(serial) = device_id(&device) {
+            let name = GstDeviceExt::display_name(device);
+            if let Some(serial) = device_id(device) {
                 let action_target = format!("win.camera::{serial}");
                 menu.append(Some(&name), Some(&action_target));
             }
