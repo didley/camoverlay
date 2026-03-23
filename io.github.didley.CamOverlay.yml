@@ -7,6 +7,7 @@ sdk-extensions:
 command: camoverlay
 finish-args:
   - --device=dri
+  - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
   - --filesystem=xdg-run/pipewire-0:ro
