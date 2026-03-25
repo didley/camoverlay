@@ -5,9 +5,7 @@ run:
     flatpak run io.github.didley.CamOverlay
 
 dev:
-    yq '.modules[0].sources[0] = {"type": "dir", "path": "."}' \
-        io.github.didley.CamOverlay.yml > /tmp/camoverlay-dev.yml
-    flatpak-builder --user --install --force-clean build /tmp/camoverlay-dev.yml
+    flatpak-builder --user --install --force-clean --disable-cache build io.github.didley.CamOverlay.yml
     flatpak run io.github.didley.CamOverlay
 
 lint:
