@@ -15,10 +15,11 @@ lint:
 release version:
     @echo "Bumping version to {{version}}..."
     sed -i 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
+    cargo generate-lockfile
     sed -i "s/version: '.*'/version: '{{version}}'/" meson.build
     sed -i '/<releases>/a\    <release version="{{version}}" date="'"$(date +%Y-%m-%d)"'">\n      <description>\n        <p>Release {{version}}.</p>\n      </description>\n    </release>' data/io.github.didley.CamOverlay.metainfo.xml
     @echo "Committing and tagging v{{version}}..."
-    git add Cargo.toml meson.build data/io.github.didley.CamOverlay.metainfo.xml
+    git add Cargo.toml Cargo.lock meson.build data/io.github.didley.CamOverlay.metainfo.xml
     git commit -m "Release v{{version}}"
     git tag "v{{version}}"
     @echo "Done! Run 'git push && git push --tags' to publish."
