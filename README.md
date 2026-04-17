@@ -46,6 +46,10 @@ Requires [`just`](https://github.com/casey/just). See [`justfile`](justfile).
 - GStreamer with PipeWire support
 - Rust stable toolchain
 
+## Alternatives
+
+**MacOS:** This is quite close to the feature set of [Quick Camera](https://apps.apple.com/app/quick-camera/id598853070)
+
 ## License
 
 GPL-3.0-or-later
